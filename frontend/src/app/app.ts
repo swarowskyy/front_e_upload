@@ -1,92 +1,96 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ArquivoService } from './ArquivoService';
-
+import { ArquivoService } from './ArquivoService'; // Garanta que o nome do arquivo está idêntico
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule], // Necessário para usar *ngFor, *ngIf no HTML
+  imports: [CommonModule],
   templateUrl: './app.html',
+  styleUrls: ['./app.css']
 })
 export class App implements OnInit {
+  public fileService = inject(ArquivoService);
+  
+  // CORREÇÃO LINHA 15: Definimos a URL direto aqui para evitar o erro do 'this'
+  public staticUrl = 'http://localhost:3000/uploads'; 
+
   arquivos: any[] = [];
   arquivoSelecionado: File | null = null;
   
-  // Variáveis para dar feedback visual ao usuário
+  // Nova variável para a miniatura da prévia
+  previsualizacaoLocal: string | ArrayBuffer | null = null; 
+  
   mensagemSucesso: string = '';
   mensagemErro: string = '';
 
-  constructor(private arquivoService: ArquivoService) {}
-
-  // Esse método roda automaticamente assim que a tela abre
   ngOnInit() {
     this.carregarArquivos();
   }
 
   carregarArquivos() {
-    this.arquivoService.listar().subscribe({
-      next: (resposta) => {
-        this.arquivos = resposta.files;
+    // CORREÇÃO: Adicionamos ': any' na resposta para o TypeScript strict aceitar
+    this.fileService.listarArquivos().subscribe({
+      next: (resposta: any) => {
+        // Mapeia os arquivos adicionando a URL da miniatura do servidor
+        this.arquivos = resposta.files.map((arq: any) => ({
+          ...arq,
+          urlCompleta: `${this.staticUrl}/${arq.filename}`
+        }));
       },
       error: () => {
-        this.exibirErro('Não foi possível listar os arquivos. O servidor está rodando?');
+        this.mensagemErro = 'Não foi possível carregar os arquivos.';
       }
     });
   }
 
-  // Captura o arquivo quando o usuário escolhe no input
   aoSelecionarArquivo(event: any) {
-    const file = event.target.files[0];
+    const file: File = event.target.files[0];
     if (file) {
       this.arquivoSelecionado = file;
+      this.mensagemErro = '';
+      this.mensagemSucesso = '';
+
+      // LÓGICA DA PRÉVIA DA IMAGEM:
+      const reader = new FileReader();
+      reader.onload = () => {
+        this.previsualizacaoLocal = reader.result; // Salva a prévia local
+      };
+      reader.readAsDataURL(file);
     }
   }
 
   fazerUpload() {
-    if (!this.arquivoSelecionado) {
-      this.exibirErro('Por favor, selecione um arquivo primeiro.');
-      return;
-    }
+    if (!this.arquivoSelecionado) return;
 
-    this.arquivoService.upload(this.arquivoSelecionado).subscribe({
-      next: (resposta) => {
-        this.exibirSucesso(resposta.message);
-        this.arquivoSelecionado = null; // Limpa a seleção
-        this.carregarArquivos(); // Recarrega a lista para mostrar o novo arquivo
+    // CORREÇÃO: Adicionamos ': any' nos parâmetros do subscribe
+    this.fileService.enviarArquivo(this.arquivoSelecionado).subscribe({
+      next: (resposta: any) => {
+        this.mensagemSucesso = resposta.message;
+        this.limparSelecao();
+        this.carregarArquivos();
       },
-      error: (erro) => {
-        // Captura as mensagens de erro do seu NestJS (Ex: Payload Too Large ou Bad Request)
-        const msg = erro.error?.message || 'Ocorreu um erro no upload.';
-        this.exibirErro(msg);
+      error: (erro: any) => {
+        this.mensagemErro = erro.error?.message || 'Erro inesperado ao fazer upload.';
       }
     });
   }
 
-  deletarArquivo(filename: string) {
-    if (confirm(`Tem certeza que deseja deletar o arquivo ${filename}?`)) {
-      this.arquivoService.remover(filename).subscribe({
-        next: (resposta) => {
-          this.exibirSucesso(resposta.message);
-          this.carregarArquivos(); // Atualiza a lista após deletar
-        },
-        error: () => {
-          this.exibirErro('Erro ao deletar o arquivo.');
-        }
-      });
-    }
+  limparSelecao() {
+    this.arquivoSelecionado = null;
+    this.previsualizacaoLocal = null;
   }
 
-  // Funções auxiliares para mostrar mensagens por 3 segundos
-  private exibirSucesso(msg: string) {
-    this.mensagemSucesso = msg;
-    this.mensagemErro = '';
-    setTimeout(() => this.mensagemSucesso = '', 3000);
-  }
-
-  private exibirErro(msg: string) {
-    this.mensagemErro = msg;
-    this.mensagemSucesso = '';
-    setTimeout(() => this.mensagemErro = '', 3000);
+  deletar(filename: string) {
+    // CORREÇÃO: Adicionamos ': any' nos parâmetros do subscribe
+    this.fileService.removerArquivo(filename).subscribe({
+      next: (resposta: any) => {
+        this.mensagemSucesso = resposta.message;
+        this.carregarArquivos();
+      },
+      error: (erro: any) => {
+        this.mensagemErro = erro.error?.message || 'Arquivo não encontrado.';
+      }
+    });
   }
 }
