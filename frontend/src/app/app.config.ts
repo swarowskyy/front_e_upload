@@ -1,12 +1,17 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient } from '@angular/common/http'; // IMPORTANTE: Adicione esta linha
 import { routes } from './app.routes';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+import { provideClientHydration } from '@angular/platform-browser';
+
+// 1. Garanta que provideHttpClient e withFetch estão sendo importados daqui:
+import { provideHttpClient, withFetch } from '@angular/common/http';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideBrowserGlobalErrorListeners(),
-    provideRouter(routes), provideClientHydration(withEventReplay()),provideHttpClient()
+    provideRouter(routes), 
+    provideClientHydration(),
+    
+    // 2. Adicione o withFetch() dentro do provideHttpClient():
+    provideHttpClient(withFetch())
   ]
 };
